@@ -1,0 +1,54 @@
+.navbar {
+  background-color: #ffffff;
+  padding: 10px 20px; 
+  color: #102746; /* Text color */
+  display: flex; 
+  justify-content: space-between; /* Space items evenly */
+  align-items: center; 
+  height: 50px;
+}
+
+.navbar-left {
+  display: flex; 
+  align-items: center; 
+}
+
+.navbar-logo {
+  width: 100px; /* Adjust the width of the image */
+  margin-right: 10px; /* Add margin to the right of the image */
+}
+
+.navbar-title {
+  margin: 0; 
+  font-size: 2rem; 
+  font-family:'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif ;
+}
+
+.navbar-items ul {
+  list-style-type: none; /* Remove list bullets */
+  margin: 0; 
+  padding: 0; 
+}
+
+.navbar-items ul li {
+  display: inline; /* Display items inline */
+  margin-right: 20px; /* Add spacing between items */
+}
+
+.navbar-items ul li:last-child {
+  margin-right: 0; /* Remove margin for last item */
+}
+
+.navbar-items ul li a {
+  color: #000000; /* Text color */
+  text-decoration: none; /* Remove underline */
+  font-size: 1.5rem; 
+  margin: 10px;
+
+}
+
+.navbar-items ul li a:hover {
+  color: #102746; /* Text color on hover */
+  font-weight: bold; /* Make font bold */
+  transition: color 0.2s; /* Smooth color transition */
+}

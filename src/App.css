@@ -1,0 +1,21 @@
+/* Ensure full height for the entire app */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Main container for the entire app */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh; /* Use the full viewport height */
+}
+
+/* Wrapper for the map component */
+.map-wrapper {
+  flex: 1; /* Take up all available space */
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 10px; 
+}

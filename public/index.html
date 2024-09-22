@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Brunel Campus Map</title>
+
+  <script
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC9T6jfsnZra1FS3Ud__bLN6bGtUUJ8kH4&libraries=places,geometry"></script>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <style>
+    .container {
+      padding-left: 5px;
+      padding-right: 25px;
+      /* Adjust this value as needed */
+    }
+
+    /* Map CSS */
+    #map {
+      height: 500px;
+      width: 100%;
+
+    }
+
+    /* Search bar CSS */
+    #search_input {
+      font-size: 18px;
+    }
+
+    .form-group {
+      margin-bottom: 10px;
+      margin-top: 20px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: .375rem .75rem;
+      font-size: 1rem;
+      line-height: 1.5;
+      color: #495057;
+      background-color: #fff;
+      background-clip: padding-box;
+      border: 1px solid #ced4da;
+      border-radius: .25rem;
+      transition: border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      /* Ensure the modal appears on top of the map */
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background-color: rgba(0, 0, 0, 0.5);
+      /* Semi-transparent background */
+    }
+
+    /* Modal CSS */
+
+    .modal-content {
+      background-color: #fefefe;
+      margin: 10% auto;
+      padding: 10px;
+      border: 1px solid #888;
+      width: 80%;
+      max-width: 800px;
+    }
+
+    .close {
+      color: #aaa;
+      float: right;
+      font-size: 28px;
+      font-weight: bold;
+    }
+
+    .close:hover,
+    .close:focus {
+      color: black;
+      text-decoration: none;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Brunel Campus Map</h1>
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-12">
+        <div class="form-group">
+          <label>Your location:</label>
+          <input type="text" class="form-control" id="origin" placeholder="Type your location address..." />
+        </div>
+        <div class="form-group">
+          <label>Destination:</label>
+          <input type="text" class="form-control" id="destination" placeholder="Type destination address..." />
+        </div>
+        <button onclick="calculateAndDisplayRoute()">Calculate Route</button>
+        <button onclick="toggleMapView()">Toggle Satellite View</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="map"></div>
+
+  <div id="myModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeModal()">&times;</span>
+      <iframe id="iframeContent" title="Sample space - Smplrspace" style="border: 0px none; width: 100%; height: 80vh;"
+        scrolling="no" allowfullscreen="" webkitallowfullscreen="" mozallowfullscreen=""></iframe>
+    </div>
+  </div>
+
+  <script>
+    var universityBounds = {
+      north: 51.5347, // Latitude of northern boundary
+      south: 51.5303, // Latitude of southern boundary
+      east: -0.4663, // Longitude of eastern boundary 
+      west: -0.4824  // Longitude of western boundary
+    };
+
+    var map;
+
+    var directionsService;
+    var directionsDisplay;
+
+    var userMarker;
+
+    function initMap() {
+      map = new google.maps.Map(document.getElementById('map'), {
+        center: { lat: 51.5321, lng: -0.4726 }, // Center of campus
+        zoom: 15, // Initial zoom level
+        restriction: {
+          latLngBounds: universityBounds,
+          strictBounds: true
+        },
+        mapTypeControl: false // Disable map type control
+      });
+
+      // Limit zoom levels
+      map.setOptions({ minZoom: 2, maxZoom: 19 });
+
+      // Get user's current location when the page loads
+      getUserLocation();
+
+      // Initialize directions service and display
+      directionsService = new google.maps.DirectionsService();
+      directionsDisplay = new google.maps.DirectionsRenderer();
+      directionsDisplay.setMap(map);
+
+      // Define the bounds for the search
+      var searchBounds = new google.maps.LatLngBounds(
+        new google.maps.LatLng(51.5303, -0.4824), // Southwest corner
+        new google.maps.LatLng(51.5347, -0.4663)  // Northeast corner
+      );
+
+      // Initialize autocomplete for origin input
+      var originAutocomplete = new google.maps.places.Autocomplete(document.getElementById('origin'), {
+        types: ['geocode'],
+        strictBounds: true,
+        bounds: searchBounds
+      });
+
+      // Initialize autocomplete for destination input
+      var destinationAutocomplete = new google.maps.places.Autocomplete(document.getElementById('destination'), {
+        types: ['geocode'],
+        strictBounds: true,
+        bounds: searchBounds
+      });
+
+      // Call the function to initialize destination autocomplete
+      initializeDestinationAutocomplete();
+
+
+      // Enable geolocation
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function (position) {
+          var initialLocation = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
+          map.setCenter(initialLocation);
+
+          // Set default origin address to user's real-time location
+          var geocoder = new google.maps.Geocoder();
+          geocoder.geocode({ 'location': initialLocation }, function (results, status) {
+            if (status === 'OK') {
+              if (results[0]) {
+                document.getElementById('origin').value = results[0].formatted_address;
+              }
+            } else {
+              console.error('Geocoder failed due to: ' + status);
+            }
+          });
+
+        }, function () {
+          handleLocationError(true, map.getCenter());
+        });
+      } else {
+        // Browser doesn't support Geolocation
+        handleLocationError(false, map.getCenter());
+      }
+
+      // Add markers for each classroom
+      classrooms.forEach(function (classroom) {
+        var marker = new google.maps.Marker({
+          position: classroom.location,
+          map: map,
+          title: classroom.name,
+          // You can customize the marker icon if needed
+          // icon: 'classroom.png'
+        });
+
+        // Optionally, add info windows
+        var infowindow = new google.maps.InfoWindow({
+          content: '<strong>' + classroom.name + '</strong><br>' + classroom.location.toString()
+        });
+
+        marker.addListener('click', function () {
+          infowindow.open(map, marker);
+        });
+      });
+
+      //51.53283261680732, -0.47294898273373465
+      var desiredLocations = [
+        { name: 'Wilfred Brown', location: new google.maps.LatLng(51.53269, -0.47522), url: 'https://smplr.me/wDdMxBA', radius: 20 },
+        { name: 'Lecture Centre', location: new google.maps.LatLng(51.53283, -0.47294), url: 'https://smplr.me/wDdMxBA', radius: 20 }
+      ];
+
+      google.maps.event.addListener(map, 'click', function (event) {
+        var clickedLocation = event.latLng;
+
+        // Iterate through each desired location
+        desiredLocations.forEach(function (desiredLocation) {
+          // Calculate the distance between the clicked location and the current desired location
+          var distance = google.maps.geometry.spherical.computeDistanceBetween(desiredLocation.location, clickedLocation);
+
+          // Check if the click is within the desired location or within the specified radius
+          if (distance <= desiredLocation.radius) {
+            openIframe(desiredLocation.url);
+          }
+        });
+      });
+
+      var service = new google.maps.places.PlacesService(map);
+
+    }
+
+    // Function to get user's current location
+    function getUserLocation() {
+      if (navigator.geolocation) {
+        navigator.geolocation.watchPosition(function (position) {
+          var userLocation = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+
+          // Remove previous marker if exists
+          if (userMarker) {
+            userMarker.setMap(null);
+          }
+
+          // Place a marker at the user's location
+          userMarker = new google.maps.Marker({
+            position: userLocation,
+            map: map,
+            title: 'Your Location',
+            icon: {
+              url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png' // Custom marker icon
+            }
+          });
+
+          // Center the map on the user's location
+          map.setCenter(userLocation);
+        }, function () {
+          handleLocationError(true, map.getCenter());
+        });
+      } else {
+        // Browser doesn't support Geolocation
+        handleLocationError(false, map.getCenter());
+      }
+    }
+
+    function handleLocationError(browserHasGeolocation, pos) {
+      // Handle geolocation error
+    }
+
+    // Mapping between destination names and coordinates
+    var destinations = {
+      "wlfb318": { lat: 51.533, lng: -0.472 },
+      // Add more destinations as needed
+    };
+
+    function initializeDestinationAutocomplete() {
+      var destinationInput = document.getElementById('destination');
+      var autocomplete = new google.maps.places.Autocomplete(destinationInput, { types: ['geocode'] });
+
+      autocomplete.setOptions({
+        types: ['geocode'],
+        strictBounds: true,
+        bounds: universityBounds,
+        fields: ['address_components', 'geometry']
+      });
+
+      autocomplete.addListener('place_changed', function () {
+        var place = autocomplete.getPlace();
+        if (!place.geometry) {
+          // User entered the name of a Place that was not suggested and
+          // pressed the Enter key, or the Place Details request failed.
+          window.alert("No details available for input: '" + place.name + "'");
+          return;
+        }
+
+        var destinationName = place.name.toLowerCase();
+        if (destinations.hasOwnProperty(destinationName)) {
+          var latLng = new google.maps.LatLng(destinations[destinationName].lat, destinations[destinationName].lng);
+          map.setCenter(latLng);
+          map.setZoom(17); // Adjust the zoom level as needed
+        }
+      });
+
+      // Create a new array to hold destination predictions
+      var destinationPredictions = [];
+
+      // Add destinations to the prediction array
+      for (var destination in destinations) {
+        destinationPredictions.push(destination);
+      }
+
+      // Add a listener for input changes
+      destinationInput.addEventListener('input', function () {
+        var input = destinationInput.value.toLowerCase();
+        var predictions = [];
+
+        // Filter destinations that start with the user input
+        for (var i = 0; i < destinationPredictions.length; i++) {
+          if (destinationPredictions[i].startsWith(input)) {
+            predictions.push(destinationPredictions[i]);
+          }
+        }
+
+        // Retrieve predictions from the Google Places API
+        var service = new google.maps.places.AutocompleteService();
+        service.getPlacePredictions({ input: input }, function (results, status) {
+          if (status == google.maps.places.PlacesServiceStatus.OK) {
+            for (var i = 0; i < results.length; i++) {
+              predictions.push(results[i].description);
+            }
+          }
+
+          // Display the predictions
+          autocomplete.setValues(predictions);
+        });
+      });
+    }
+
+
+
+
+    // Function to calculate and display directions
+    function calculateAndDisplayRoute() {
+      var origin = document.getElementById('origin').value;
+      var destinationInput = document.getElementById('destination').value.toLowerCase();
+      var mode = google.maps.TravelMode.WALKING;
+      var destination;
+
+      // Check if the entered destination matches any predefined destinations
+      if (destinations.hasOwnProperty(destinationInput)) {
+        destination = new google.maps.LatLng(destinations[destinationInput].lat, destinations[destinationInput].lng);
+      } else {
+        destination = destinationInput; // Use the entered destination as is
+      }
+
+      var request = {
+        origin: origin,
+        destination: destination,
+        travelMode: mode
+      };
+
+      directionsService.route(request, function (result, status) {
+        if (status == google.maps.DirectionsStatus.OK) {
+          directionsDisplay.setDirections(result);
+        } else {
+          window.alert('Directions request failed due to ' + status);
+        }
+      });
+    }
+
+    // Function to toggle between road map and satellite view
+    function toggleMapView() {
+      var currentMapType = map.getMapTypeId();
+      if (currentMapType === 'roadmap') {
+        map.setMapTypeId('satellite');
+      } else {
+        map.setMapTypeId('roadmap');
+      }
+    }
+
+    // Function to open the iframe modal
+    function openIframe(url) {
+      var modal = document.getElementById('myModal');
+      var iframe = document.getElementById('iframeContent');
+      iframe.src = url;
+      modal.style.display = 'block';
+    }
+
+    // Function to close the iframe modal
+    function closeModal() {
+      var modal = document.getElementById('myModal');
+      modal.style.display = 'none';
+    }
+
+    google.maps.event.addDomListener(window, 'load', initMap);
+
+  </script>
+
+</body>
+
+</html>
